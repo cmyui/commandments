@@ -24,7 +24,7 @@ goals should be specific and realistic.
 """
 
 import dataclasses
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import json
 
@@ -35,7 +35,7 @@ class EnhancedJSONEncoder(json.JSONEncoder):
     def default(self, o):
         if dataclasses.is_dataclass(o):
             return dataclasses.asdict(o)
-        elif isinstance(o, datetime):
+        elif isinstance(o, (datetime, date)):
             return o.isoformat()
         return super().default(o)
 
@@ -50,50 +50,73 @@ class SuccessCriteria:
 class Goal:
     name: str
     success_criteria: SuccessCriteria
-    starts_at: datetime
-    ends_at: datetime
+    starts_at: date
+    ends_at: date
     was_successful: bool | None = None
 
 
 @dataclasses.dataclass
 class State:
     goals: list[Goal]
+    goals_last_updated: date | None = None
+
+    @classmethod
+    def from_state_file(cls) -> "State | None":
+        try:
+            with open(STATE_FILE, "r") as f:
+                json_state = json.load(f)
+
+            state = cls(
+                goals=[
+                    Goal(
+                        name=goal["name"],
+                        success_criteria=SuccessCriteria(
+                            num_checkpoints=goal["success_criteria"]["num_checkpoints"],
+                            permitted_failures=goal["success_criteria"][
+                                "permitted_failures"
+                            ],
+                        ),
+                        starts_at=date.fromisoformat(goal["starts_at"]),
+                        ends_at=date.fromisoformat(goal["ends_at"]),
+                        was_successful=goal["was_successful"],
+                    )
+                    for goal in json_state["goals"]
+                ],
+                goals_last_updated=(
+                    date.fromisoformat(json_state["goals_last_updated"])
+                    if json_state["goals_last_updated"] is not None
+                    else None
+                ),
+            )
+        except json.decoder.JSONDecodeError:
+            print("Error: state file is corrupted.")
+            print("Please delete the state file and restart the program.")
+            return None
+        except FileNotFoundError:
+            state = cls(goals=[], goals_last_updated=None)
+            with open(STATE_FILE, "w") as f:
+                json.dump(state, f, cls=EnhancedJSONEncoder)
+
+        return state
+
+    def write_to_state_file(self) -> None:
+        with open(STATE_FILE, "w") as f:
+            json.dump(self, f, cls=EnhancedJSONEncoder)
 
 
 def main() -> int:
-    if datetime.today().day != 1:
+    if date.today().day != 1:
         print("This program only runs on the first day of the month.")
         return 1
 
-    try:
-        with open(STATE_FILE, "r") as f:
-            json_state = json.load(f)
-
-        state = State(
-            goals=[
-                Goal(
-                    name=goal["name"],
-                    success_criteria=SuccessCriteria(
-                        num_checkpoints=goal["success_criteria"]["num_checkpoints"],
-                        permitted_failures=goal["success_criteria"][
-                            "permitted_failures"
-                        ],
-                    ),
-                    starts_at=datetime.fromisoformat(goal["starts_at"]),
-                    ends_at=datetime.fromisoformat(goal["ends_at"]),
-                    was_successful=goal["was_successful"],
-                )
-                for goal in json_state["goals"]
-            ]
-        )
-    except json.decoder.JSONDecodeError:
-        print("Error: state file is corrupted.")
-        print("Please delete the state file and restart the program.")
+    state = State.from_state_file()
+    if state is None:
         return 1
-    except FileNotFoundError:
-        state = State(goals=[])
-        with open(STATE_FILE, "w") as f:
-            json.dump(state, f, cls=EnhancedJSONEncoder)
+
+    if date.today() == state.goals_last_updated:
+        print("You have already set your goals for this month.")
+        print(f"Come back back on {date.today() + timedelta(days=30)}.")
+        return 1
 
     print("Welcome to the N Commandments program.")
 
@@ -106,7 +129,7 @@ def main() -> int:
         print("Enter 'q' to finish.")
 
         for goal in unfinished_goals:
-            print(f"Goal: {goal.name} started on {goal.starts_at.date()}.")
+            print(f"Goal: {goal.name} started on {goal.starts_at}.")
             success = input("Were you successful? (y/n/q): ")
             if success == "q":
                 break
@@ -128,13 +151,12 @@ def main() -> int:
         goal = Goal(
             name=goal_name,
             success_criteria=success_criteria,
-            starts_at=datetime.today(),
-            ends_at=datetime.today() + timedelta(days=30),
+            starts_at=date.today(),
+            ends_at=date.today() + timedelta(days=30),
         )
         state.goals.append(goal)
 
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f, cls=EnhancedJSONEncoder)
+    state.write_to_state_file()
 
     print("Goals saved successfully.")
     print("Good luck!")
