@@ -89,8 +89,6 @@ class State:
                 ),
             )
         except json.decoder.JSONDecodeError:
-            print("Error: state file is corrupted.")
-            print("Please delete the state file and restart the program.")
             return None
         except FileNotFoundError:
             state = cls(goals=[], goals_last_updated=None)
@@ -111,6 +109,8 @@ def main() -> int:
 
     state = State.from_state_file()
     if state is None:
+        print("Error: state file is corrupted.")
+        print("Please delete the state file and restart the program.")
         return 1
 
     if date.today() == state.goals_last_updated:
