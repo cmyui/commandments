@@ -66,7 +66,24 @@ def main() -> int:
 
     try:
         with open(STATE_FILE, "r") as f:
-            state = json.load(f)
+            json_state = json.load(f)
+
+        state = State(
+            goals=[
+                Goal(
+                    name=goal["name"],
+                    success_criteria=SuccessCriteria(
+                        num_checkpoints=goal["success_criteria"]["num_checkpoints"],
+                        permitted_failures=goal["success_criteria"][
+                            "permitted_failures"
+                        ],
+                    ),
+                    starts_at=datetime.fromisoformat(goal["starts_at"]),
+                    ends_at=datetime.fromisoformat(goal["ends_at"]),
+                )
+                for goal in json_state["goals"]
+            ]
+        )
     except json.decoder.JSONDecodeError:
         print("Error: state file is corrupted.")
         print("Please delete the state file and restart the program.")
