@@ -52,6 +52,7 @@ class Goal:
     success_criteria: SuccessCriteria
     starts_at: datetime
     ends_at: datetime
+    was_successful: bool | None = None
 
 
 @dataclasses.dataclass
@@ -80,6 +81,7 @@ def main() -> int:
                     ),
                     starts_at=datetime.fromisoformat(goal["starts_at"]),
                     ends_at=datetime.fromisoformat(goal["ends_at"]),
+                    was_successful=goal["was_successful"],
                 )
                 for goal in json_state["goals"]
             ]
@@ -94,6 +96,23 @@ def main() -> int:
             json.dump(state, f, cls=EnhancedJSONEncoder)
 
     print("Welcome to the N Commandments program.")
+
+    unfinished_goals = [goal for goal in state.goals if goal.was_successful is None]
+    if unfinished_goals:
+        # check if they were successful in their previously-set goals
+        print("You have previously set goals.")
+        print("Please reflect on your success and failures.")
+        print("Please enter 'y' if you were successful, 'n' if you were not.")
+        print("Enter 'q' to finish.")
+
+        for goal in unfinished_goals:
+            print(f"Goal: {goal.name} started on {goal.starts_at.date()}.")
+            success = input("Were you successful? (y/n/q): ")
+            if success == "q":
+                break
+
+            goal.was_successful = success == "y"
+
     print("Please enter your goals for the month.")
     print("Enter 'q' to finish.")
 
